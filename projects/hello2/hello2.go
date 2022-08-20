@@ -15,7 +15,8 @@ func main() {
 	// 获取一个问候消息，并打印它
 	// message := greetings.Hello("hef")
 	// 请求一个问候消息
-	message, err := greetings.Hello("")
+	// message, err := greetings.Hello("")
+	message, err := greetings.Hello("hef")
 	// 如果一个错误返回，将它打印到控制台，并退出程序
 	if err != nil {
 		log.Fatal(err)
