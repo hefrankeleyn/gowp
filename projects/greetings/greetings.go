@@ -20,6 +20,22 @@ func Hello(name string) (string, error) {
 	return message, nil
 }
 
+// Hellow 返回一个关联了每一个人名和问候语的map
+func Hellos(names []string) (map[string]string, error) {
+	// 一个map，用于关联人名和消息
+	messages := make(map[string]string)
+	// 循环查看接口的分片names，调用Hello函数 为每一个name获取一个消息
+	for _, name := range names {
+		message, err := Hello(name)
+		if err != nil {
+			return nil, err
+		}
+		// 在map中，关联检索到的消息和name
+		messages[name] = message
+	}
+	return messages, nil
+}
+
 // 为在函数中使用的变量初始化集合的最初始的值
 func init() {
 	rand.Seed(time.Now().UnixNano())

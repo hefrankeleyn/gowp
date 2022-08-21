@@ -16,12 +16,19 @@ func main() {
 	// message := greetings.Hello("hef")
 	// 请求一个问候消息
 	// message, err := greetings.Hello("")
-	message, err := greetings.Hello("hef")
+	// message, err := greetings.Hello("hef")
+
+	// 一个names切片
+	names := []string{"lifei", "tw", "zy", "my"}
+	// 为names请求问候消息
+	messages, err := greetings.Hellos(names)
+
 	// 如果一个错误返回，将它打印到控制台，并退出程序
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// 如果没有错误返回，打印返回到消息到控制台
-	fmt.Println(message)
+	// fmt.Println(message)
+	fmt.Println(messages)
 }
