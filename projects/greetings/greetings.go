@@ -16,8 +16,8 @@ func Hello(name string) (string, error) {
 	// 如果接受到一个名字，返回一个问候，嵌套名字在消息中
 	// message := fmt.Sprintf("Hi, %v. Welcome!", name)
 	// 使用随机消息格式创建消息
-	// message := fmt.Sprintf(randomFormat(), name)
-	message := fmt.Sprintf(randomFormat())
+	message := fmt.Sprintf(randomFormat(), name)
+	// message := fmt.Sprintf(randomFormat())
 	return message, nil
 }
 
