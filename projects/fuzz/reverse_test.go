@@ -8,12 +8,19 @@ import (
 func FuzzReverse(f *testing.F) {
 	testcase := []string{"Hello World", " ", "!12345"}
 	for _, tc := range testcase {
-		f.Add(tc)
+		f.Add(tc) // 使用 f.Add 提供种子语料库
 	}
 	f.Fuzz(func(t *testing.T, orig string) {
-		rev := Reverse(orig)
-		doubleRev := Reverse(rev)
-		t.Logf("Number of runes: orig=%d, rev=%d, doubleRev=%d", utf8.RuneCountInString(orig), utf8.RuneCountInString(rev), utf8.RuneCountInString(doubleRev))
+		rev, err1 := Reverse(orig)
+		if err1 != nil {
+			t.Skip()
+			// return
+		}
+		doubleRev, err2 := Reverse(rev)
+		if err2 != nil {
+			t.Skip()
+			// return
+		}
 		if orig != doubleRev {
 			t.Errorf("Before: %q, after: %q", orig, doubleRev)
 		}
