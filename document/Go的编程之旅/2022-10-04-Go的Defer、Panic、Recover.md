@@ -1,0 +1,92 @@
+# Go的Defer、Panic、Recover
+
+[toc]
+
+## 一、说明
+
+Go拥有对控制流非常常见的机制：if、for、switch、goto。在这儿我们想讨论一些不常见的东西：defer、panic、recover。
+
+## 二、defer语句
+
+一个defer语句，把一个函数调用推送到列表中。这个被保存的列表将在周围的函数返回之后被调用。Defer是通常被用于去简化执行各种清理行为的函数。
+
+例如，让我们看一个函数，它打开两个文件，将一个文件内容拷贝到另一个文件中。
+
+```go
+func copyFile(dstName, srcName string) (written int64, err error) {
+  src, err := os.Open(srcName)
+  if err!=nil {
+    return
+  }
+  dst, err: = os.Create(dstName)
+  if err!=nil {
+    return
+  }
+  written, err = io.Copy(dst, src)
+  dst.Close()
+  src.Close()
+  return
+}
+```
+
+这个能工作，但是有一个Bug。如果调用`os.Create`失败，函数将返回，不会关闭源文件。这很容易能补救通过把`src.Close()`放到第二个return之前，但是如果函数非常的复杂，问题就不容易被注意到并解决。通过引入`defer`语句，我们能够确保这个文件总是被关闭：
+
+```go
+func copyFile(dstName, srcName string) (written int64, err error) {
+  src, err := os.Open(srcName)
+  if err!=nil {
+    return
+  }
+  defer src.Close()
+  dst, err: = os.Create(dstName)
+  if err!=nil {
+    return
+  }
+  defer dst.Close()
+  return io.Copy(dst, src)
+}
+```
+
+Defer语句允许我们去考虑关闭每个文件在正确的打开它之后。保证在函数中不管有多少句返回语句，文件将被关闭。
+
+defer 语句的行为是直接且可预测的。这儿有三个规则：
+
+1. 在评估 defer 语句时，会评估延迟函数的参数。
+
+   在这个例子中，当Println调用是被延迟的时候表达式"i"将被评估。那个推迟的调用将打印“0”，在函数返回之后。
+
+   ```go
+   func a() {
+     i := 0
+     defer fmt.Println(i)
+     
+     i++
+     return
+   }
+   ```
+
+2. 在周围的函数返回之后，推迟的函数调用是按照”后进先出“的顺序被执行。
+
+   这个函数打印”3210“
+
+   ```go
+   func b() {
+   	for i := 0; i < 4; i++ {
+   		defer fmt.Print(i)
+   	}
+   }
+   ```
+
+3. 延迟函数可以读取并分配给返回函数的命名返回值。
+
+   这个例子，在周围的返回函数返回之后，一个延迟函数对返回值的1进行递增，因此，这个函数返回2:
+
+   ```go
+   func c() (i int) {
+   	defer func() { i++ }()
+   	return 1
+   }
+   ```
+
+   这样方便修改函数的错误返回值； 我们很快就会看到一个例子。
+
