@@ -16,7 +16,7 @@ func main() {
 	// 这里的ok也可以没有，如果没有，判断不通过会引发异常
 	// value 是类型转换之后都值；ok 是断言是否成功
 	vlaue, ok := interface{}(container).([]string)
-	fmt.Printf("%q, %%, %t\n", vlaue, ok)
+	fmt.Printf("%q, %%, %v\n", vlaue, ok)
 	fmt.Printf("这个元素是：%q\n", container)
 
 	// 第二种判断类型的方法
