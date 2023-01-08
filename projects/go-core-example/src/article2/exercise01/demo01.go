@@ -7,6 +7,7 @@ import (
 
 var name string //
 
+// go run demo01.go -name="aa"
 func init() {
 	fmt.Println("运行init函数....")
 	// flag 接收四个参数
