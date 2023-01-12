@@ -29,6 +29,28 @@ type Context interface{
 }
 ```
 
+Done方法返回一个通道，这个通道给那些代表`Context`运行函数的取消信号：当通道被关闭，当通道关闭，这些函数应该立刻放弃它们的工作并返回。Err函数返回一个错误，表明为什么Context 是被取消。在[管道和消除](https://go.dev/blog/pipelines)这篇文件中更详细的探讨了Done 通道的完整用法。
+
+一个Context没有一个Cancel方法，和Done通道仅用于接收的原因相同：函数通常是接收到一个取消信号，而不是发送一个信号。尤其是，当一个父操作为子操作启动goroutines，这些子操作不应该能够去取消父操作。相反，`WithCancel`函数（在下面描述）提供了一个方法用于取消一个新的Context值。
+
+一个Context被多个goroutine同时使用时安全的。代码能够传统同一个Context给任何数量的goroutines，并取消Context以向所有goroutines发出信号。
+
+Deadline方法允许函数去确定是否它们应该都开始工作；如果剩余的时间太少，它可能是没有价值的。代码也可以使用最后期限给I/O操作设置超时时间。
+
+Value允许一个Context可以携带请求范围的值。这个数据对多个goroutines同时使用必须是安全的。
+
+## 三、context的衍生
+
+context包提供了一个函数用于从已经存在的Contexts里衍生新的Context值。**这些值形成了树**：当一个Context被取消，所有从它衍生出来的Context也将被取消。
+
+Background是任何Context树的根，它永远不会被取消：
+
+```go
+func Background() Context
+```
+
+
+
 
 
 ## 一、使用context包中程序实体实现`sync.WaitGroup`同样的功能
