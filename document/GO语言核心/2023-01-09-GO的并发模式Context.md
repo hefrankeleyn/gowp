@@ -46,10 +46,43 @@ context包提供了一个函数用于从已经存在的Contexts里衍生新的Co
 Background是任何Context树的根，它永远不会被取消：
 
 ```go
+/// Background 返回一个空的context。它绝不会被取消，没有最后期限，不带值。
+//  Background 通常在main、init、test中使用，作为请求顶层的Context。
 func Background() Context
 ```
 
+`WithCancel`和`WithTimeout`返回衍生的Context值。它能比它父Context更早的取消。
 
+关联一个传入请求的Context，当请求处理返回的时候，它通常能够被取消。
+
+当使用多个副本的时候，`WithCancel`对于·取消冗余的请求也很有用。
+
+`WithTimeout`对于设置后台服务请求的截止日期很有用。
+
+```go
+// WithCancel 返回一个父Context的拷贝，它的Done通道在父级关闭时立即关闭。
+// Done 完成关闭或取消
+func WithCancel(parent Context) (ctx Context, cancel CancelFunc)
+// 一个CancelFunc 取消一个Context
+func CancelFunc func()
+
+// WithTimeout 返回一个父级的副本，它的Done 通道在父级关闭时立即关闭。
+// 关闭 Done、调用取消或超时。
+// 新Context的最后期限，是现在+超时时间 和 父的截止日期（如果有的话）中较早的一个。
+// 如果计时器仍在运行，取消函数将释放其资源。
+func WithTimeout(parent Context, timeout time.Duration) (context, CancelFunc)
+```
+
+`WithContext` 提供了一个方法，去将请求范围的值和Context进行关联。
+
+```go
+// WithValue 返回一个父Context的副本， 它的Value方法返回key对应的val。
+func WithValue(parent Context, key interface{}, value interface{}) Context 
+```
+
+最好查看如何使用context包的方法是通过工作示例。
+
+## 四、示例：Google Web Search
 
 
 
