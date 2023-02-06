@@ -84,7 +84,204 @@ func WithValue(parent Context, key interface{}, value interface{}) Context
 
 ## 四、示例：Google Web Search
 
+我们的示例是一个HTTP服务，它处理像`/search?q=golang&timeout=1s`这样的URL，通过转发"golang" 的查询，到[Google Web Search API](https://developers.google.com/custom-search?hl=zh-cn)并展示结果。这个`timeout`参数告诉服务端在一段时间后取消请求。
 
+代码被分到三个包中：
+
+- `server` 提供main函数，并处理`/search`请求；
+- `userip` 提供用于从请求中提取用户ip地址的函数，并将它和Context进行关联；
+- `google` 提供查询函数用于发送请求到 Google；
+
+### 4.1 server程序
+
+`server`程序处理像`/search?q=golang`的请求，通过提供前几个对golang在Google上的查询结果。它注册handleSearch来处理`/search`端点。这个处理创建了一个初始的Context称之为ctx，当处理返回的时候，安排它取消。如果请求包含`timeout`URL参数，当超时时间通过Context将自动被取消：
+
+```go
+func main() {
+	// 注册 handleSearch 来处理 /search 端点
+	http.HandleFunc("/search", handleSearch)
+}
+
+func handleSearch(w http.ResponseWriter, req *http.Request) {
+	// ctx 是 这个处理器的 Context。
+	// 调用 cancel 关闭ctx.Done 的通道。这是对这个请求的取消信号，被处理器启动。
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
+	// 获取超时时间
+	timeout, err := time.ParseDuration(req.FormValue("timeout"))
+	if err == nil {
+		//  请求有超时时间，因此创建一个context，当超时时间到期后它将自动取消
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
+	// handleSearch返回之后，立刻取消ctx
+	defer cancel()
+```
+
+处理器从请求中提取查询，并通过调用userip包提取客户端的IP地址。客户端的IP地址对后端是需要的，因此handleSearch将它绑定到ctx上：
+
+```go
+	// 检查查询请求
+	query := req.FormValue("q")
+	if query == "" {
+		http.Error(w, "no query", http.StatusBadRequest)
+		return
+	}
+	userIP, err := userip.FromRequest(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	ctx = userip.NewContext(ctx, userIP)
+```
+
+handle调用`google.Search`方法，带有ctx和query：
+
+```go
+	// 运行Google 搜索，并打印结果
+	start := time.Now()
+	results, err := google.Search(ctx, query)
+	elapsed := time.Since(start)
+```
+
+如果查询成功，处理器渲染结果
+
+```go
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := resultsTemplate.Execute(w, struct {
+		Results          google.Results
+		Timeout, Elapsed time.Duration
+	}{
+		Results: results,
+		Timeout: timeout,
+		Elapsed: elapsed,
+	}); err != nil {
+		log.Print(err)
+		return
+	}
+```
+
+### 4.2 userip 包
+
+`userip`包提供了用于从请求中提取用户ip地址的函数，并将它关联到Context中。一个Context提供了键-值对的映射，在这里键和值都是`interface{}`类型。键的类型必须支持判等操作，值在被多个goroutine同时使用多时候必须是安全的。像userip包，隐藏了这个映射的细节，并提供了抢类型用于读取一个特定的Context值。
+
+为了避免键的冲突，`userip`定义了一个不对外开放的类型key，并使用这个类型的值作为context的键。
+
+```go
+// 密钥类型未导出以防止与其他包中定义的上下文密钥发生冲突。
+type key int
+
+// userIPKey 是一个context key，用于用户的IP地址。它的零值是随意定的。
+// 如果这个包定义了其它的context key。它们应该是不同的数值。
+const userIPKey key = 0
+```
+
+`FromRequest`从一个`http.Request`中提取一个userIP：
+
+```go
+func FromRequest(req *http.Request) (net.IP, error) {
+	ip, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		return nil, fmt.Errorf("userip: %q is not IP:port", req.RemoteAddr)
+	}
+```
+
+`NewContext`返回一个新的Context，携带了一个提供的userIP值。
+
+```go
+// 如果ip地址存在， FromContext 从ctx中提取用户的ip地址，
+func FromContext(ctx context.Context) (net.IP, bool) {
+	// 如果 ctx 没有针对key的值，ctx.Value 将返回 nil
+	// net.IP 类型的断言 将对 nil 返回 ok=false
+	userIP, ok := ctx.Value(userIPKey).(net.IP)
+	return userIP, ok
+}
+```
+
+### 4.3 google 包
+
+`google.Search`函数创建一个HTTP请求给`Google Web Search API`，并解析JSON编码的结果。它接受一个Context参数，在请求被处理期间，如果`ctx.Done`被关闭，它将立即返回。
+
+`Google Web Search API`请求，包含了查询请求，并使用IP作为请求参数。
+
+```go
+// Search 发送查询到 Google 搜索，并返回结果
+func Search(ctx context.Context, query string) (Results, error) {
+	// 准备Google 搜索 API 请求
+	req, err := http.NewRequest("GET", "https://ajax.googleapis.com/ajax/services/search/web?v=1.0", nil)
+	if err != nil {
+		return nil, err
+	}
+	q := req.URL.Query()
+	q.Set("q", query)
+
+	// 如果 ctx 懈怠了用户的IP地址，将它转发给服务器。
+	// Google APIs 使用用户的IP地址来区分服务器发起的请求和最终用户的请求
+	if userIP, ok := userip.FromContext(ctx); ok {
+		q.Set("userip", userIP.String())
+	}
+	req.URL.RawQuery = q.Encode()
+```
+
+`Search`使用一个有用的函数，httpDo，用于发出http请求，并在请求或响应在处理期间，如果ctx.Done 被关闭，那么就取消它们。`Search`将一个闭包传递给httpDo，用于处理http响应。
+
+```go
+	// 发出HTTP请求，并处理响应。
+	// 如果 ctx.Done 是被取消， httpDo 函数将取消请求。
+	var results Results
+	err = httpDo(ctx, req, func(resp *http.Response, err error) error {
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		// 解析JSON格式的查询结果
+		// https://developers.google.com/web-search/docs/#fonje
+		var data struct {
+			ResponseData struct {
+				Results []struct {
+					TitleNoFormatting string
+					URL               string
+				}
+			}
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+			return err
+		}
+		for _, res := range data.ResponseData.Results {
+			results = append(results, Result{Title: res.TitleNoFormatting, URL: res.URL})
+		}
+		return nil
+	})
+	// httpDo 等待我们提供的闭包返回，所以在这里读取结果是安全的。
+	return results, err
+```
+
+httpDo 函数返回http请求，并在一个新的goroutine中处理它的响应。在goroutine离开之前，如果`ctx.Done`被关闭，它将取消请求。
+
+```go
+// httpDo 发起 HTTP 请求， 并使用响应调用 f 。
+//  如果 ctx.Done 在请求或f函数运行期间被关闭，httpDo取消那个请求，等待f离开，并返回ctx.Err。
+// 否则 返回 f 的 error
+func httpDo(ctx context.Context, req *http.Request, f func(*http.Response, error) error) error {
+	// 在一个goroutine中 运行HTTP请求， 并传递响应给 f
+	c := make(chan error, 1)
+	req = req.WithContext(ctx)
+	go func() { c <- f(http.DefaultClient.Do(req)) }()
+	select {
+	case <-ctx.Done():
+		<-c // 为了等待f 函数返回
+		return ctx.Err()
+	case err := <-c:
+		return err
+	}
+}
+```
 
 ## 一、使用context包中程序实体实现`sync.WaitGroup`同样的功能
 
