@@ -64,7 +64,7 @@ func Background() Context
 // Done 完成关闭或取消
 func WithCancel(parent Context) (ctx Context, cancel CancelFunc)
 // 一个CancelFunc 取消一个Context
-func CancelFunc func()
+type CancelFunc func()
 
 // WithTimeout 返回一个父级的副本，它的Done 通道在父级关闭时立即关闭。
 // 关闭 Done、调用取消或超时。
@@ -283,7 +283,7 @@ func httpDo(ctx context.Context, req *http.Request, f func(*http.Response, error
 }
 ```
 
-## 一、使用context包中程序实体实现`sync.WaitGroup`同样的功能
+## 五、使用context包中程序实体实现`sync.WaitGroup`同样的功能
 
 ### （1）使用`sync.WaitGroup`实现一对多goroutine协作流程多同步工具
 
@@ -377,3 +377,12 @@ end.
 
 执行发现，有时候结果并不对。
 
+## 六、Context的特点
+
+### （1）Context介绍
+
+Context类型是一种非常通用的同步工具，它的值不但可以任意扩散，还可以被用来传递额外的信息和信号。
+
+> Context类型可以提供一类代表上下文的值。此类值是并发安全的，也就是说它可以被传播给多个goroutine。
+
+Context类型的值可以繁衍，这意味着可以通过一个Context值产生任意个子值。这些子值可以携带其父值的属性和数据，也可以响应我们通过父值传递的信号。
