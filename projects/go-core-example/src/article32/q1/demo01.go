@@ -8,7 +8,10 @@ import (
 func main() {
 	url1 := "http://www.google.cn/"
 	fmt.Printf("Send request to %q with method GET ... \n", url1)
-	response1, err := http.Get(url1)
+	// response1, err := http.Get(url1)
+	// response1, err := http.DefaultClient.Get(url1)
+	var oneClient http.Client
+	response1, err := oneClient.Get(url1)
 	if err != nil {
 		fmt.Printf("request sending error: %v\n", err)
 	}
